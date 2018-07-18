@@ -1,0 +1,2 @@
+# MyDapperFramework
+基于dapper和DapperExtensions（有而外扩展）的仓储层框架
