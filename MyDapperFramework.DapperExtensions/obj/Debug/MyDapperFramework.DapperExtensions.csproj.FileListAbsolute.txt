@@ -1,0 +1,8 @@
+F:\MyProject\2.Net FrameWork\MyDapperFramework\MyDapperFramework\MyDapperFramework.DapperExtensions\obj\Debug\MyDapperFramework.DapperExtensions.csprojResolveAssemblyReference.cache
+F:\MyProject\2.Net FrameWork\MyDapperFramework\MyDapperFramework\MyDapperFramework.DapperExtensions\bin\Debug\MyDapperFramework.DapperExtensions.dll
+F:\MyProject\2.Net FrameWork\MyDapperFramework\MyDapperFramework\MyDapperFramework.DapperExtensions\bin\Debug\MyDapperFramework.DapperExtensions.pdb
+F:\MyProject\2.Net FrameWork\MyDapperFramework\MyDapperFramework\MyDapperFramework.DapperExtensions\bin\Debug\Dapper.dll
+F:\MyProject\2.Net FrameWork\MyDapperFramework\MyDapperFramework\MyDapperFramework.DapperExtensions\bin\Debug\Oracle.ManagedDataAccess.dll
+F:\MyProject\2.Net FrameWork\MyDapperFramework\MyDapperFramework\MyDapperFramework.DapperExtensions\bin\Debug\Dapper.xml
+F:\MyProject\2.Net FrameWork\MyDapperFramework\MyDapperFramework\MyDapperFramework.DapperExtensions\obj\Debug\MyDapperFramework.DapperExtensions.dll
+F:\MyProject\2.Net FrameWork\MyDapperFramework\MyDapperFramework\MyDapperFramework.DapperExtensions\obj\Debug\MyDapperFramework.DapperExtensions.pdb
