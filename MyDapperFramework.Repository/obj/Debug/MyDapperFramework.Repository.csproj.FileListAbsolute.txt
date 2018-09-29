@@ -1,9 +1,0 @@
-F:\MyProject\2.Net FrameWork\MyDapperFramework\MyDapperFramework\MyDapperFramework.Repository\obj\Debug\MyDapperFramework.Repository.csprojResolveAssemblyReference.cache
-F:\MyProject\2.Net FrameWork\MyDapperFramework\MyDapperFramework\MyDapperFramework.Repository\bin\Debug\MyDapperFramework.Repository.dll
-F:\MyProject\2.Net FrameWork\MyDapperFramework\MyDapperFramework\MyDapperFramework.Repository\bin\Debug\MyDapperFramework.Repository.pdb
-F:\MyProject\2.Net FrameWork\MyDapperFramework\MyDapperFramework\MyDapperFramework.Repository\bin\Debug\Dapper.dll
-F:\MyProject\2.Net FrameWork\MyDapperFramework\MyDapperFramework\MyDapperFramework.Repository\bin\Debug\MyDapperFramework.DapperExtensions.dll
-F:\MyProject\2.Net FrameWork\MyDapperFramework\MyDapperFramework\MyDapperFramework.Repository\bin\Debug\MyDapperFramework.DapperExtensions.pdb
-F:\MyProject\2.Net FrameWork\MyDapperFramework\MyDapperFramework\MyDapperFramework.Repository\bin\Debug\Dapper.xml
-F:\MyProject\2.Net FrameWork\MyDapperFramework\MyDapperFramework\MyDapperFramework.Repository\obj\Debug\MyDapperFramework.Repository.dll
-F:\MyProject\2.Net FrameWork\MyDapperFramework\MyDapperFramework\MyDapperFramework.Repository\obj\Debug\MyDapperFramework.Repository.pdb
