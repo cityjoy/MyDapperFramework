@@ -177,7 +177,8 @@ namespace DapperExtensions
 
         public static async Task<bool> DeleteAsync<T>(this IDbConnection connection, object predicate, IDbTransaction transaction = null, int? commandTimeout = null) where T : class
         {
-            return Instance.Delete<T>(connection, predicate, transaction, commandTimeout);
+            var result = await Instance.DeleteAsync<T>(connection, predicate, transaction, commandTimeout);
+            return result;
         }
 
         /// <summary>
