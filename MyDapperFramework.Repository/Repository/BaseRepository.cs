@@ -10,7 +10,6 @@ using DapperExtensions;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Dapper;
-using Dapper.Contrib.Extensions;
 using System.Configuration;
 using MyDapperFramework.Repository.Interface;
 using MyDapperFramework.Repository.Dapper;
