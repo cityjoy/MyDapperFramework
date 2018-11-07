@@ -34,6 +34,7 @@ namespace DapperExtensions
         Task<bool> DeleteAsync<T>(IDbConnection connection, object predicate, IDbTransaction transaction, int? commandTimeout) where T : class;
         IEnumerable<T> GetList<T>(IDbConnection connection, object predicate, IList<ISort> sort, IDbTransaction transaction, int? commandTimeout, bool buffered) where T : class;
         Task<IEnumerable<T>> GetListAsync<T>(IDbConnection connection, object predicate, IList<ISort> sort, IDbTransaction transaction, int? commandTimeout, bool buffered) where T : class;
+        Task<T> GetFirstAsync<T>(IDbConnection connection, object predicate, IList<ISort> sort, IDbTransaction transaction, int? commandTimeout) where T : class;
         IEnumerable<T> GetPage<T>(IDbConnection connection, object predicate, IList<ISort> sort, int page, int resultsPerPage, IDbTransaction transaction, int? commandTimeout, bool buffered) where T : class;
         Task<IEnumerable<T>> GetPageAsync<T>(IDbConnection connection, object predicate, IList<ISort> sort, int page, int resultsPerPage, IDbTransaction transaction, int? commandTimeout, bool buffered) where T : class;
         IEnumerable<T> GetSet<T>(IDbConnection connection, object predicate, IList<ISort> sort, int firstResult, int maxResults, IDbTransaction transaction, int? commandTimeout, bool buffered) where T : class;
@@ -511,6 +512,24 @@ namespace DapperExtensions
             return result;
         }
 
+        public async Task<T> GetFirstAsync<T>(IDbConnection connection, object predicate, IList<ISort> sort, IDbTransaction transaction, int? commandTimeout) where T : class
+        {
+            IClassMapper classMap = SqlGenerator.Configuration.GetMap<T>();
+            IPredicate wherePredicate = GetPredicate(classMap, predicate);
+            Dictionary<string, object> parameters = new Dictionary<string, object>();
+            string sql = SqlGenerator.Select(classMap, wherePredicate, sort, parameters);
+            DynamicParameters dynamicParameters = new DynamicParameters();
+            foreach (var parameter in parameters)
+            {
+                dynamicParameters.Add(parameter.Key, parameter.Value);
+            }
+
+            //CommandDefinition commond = new CommandDefinition(sql, dynamicParameters, transaction, commandTimeout, CommandType.Text, buffered == true ? CommandFlags.Buffered : CommandFlags.NoCache);
+
+            var result = await connection.QueryFirstAsync<T>(sql, dynamicParameters, transaction, commandTimeout, CommandType.Text);
+            return result;
+        }
+
         public IEnumerable<T> GetPage<T>(IDbConnection connection, object predicate, IList<ISort> sort, int page, int resultsPerPage, IDbTransaction transaction, int? commandTimeout, bool buffered) where T : class
         {
             IClassMapper classMap = SqlGenerator.Configuration.GetMap<T>();
@@ -560,7 +579,7 @@ namespace DapperExtensions
             CommandDefinition commond = new CommandDefinition(sql, dynamicParameters, transaction, commandTimeout, CommandType.Text);
 
             var result = await connection.QueryAsync(commond);
-            return result.Count();
+            return result.SingleOrDefault().Total;
         }
 
         public IMultipleResultReader GetMultiple(IDbConnection connection, GetMultiplePredicate predicate, IDbTransaction transaction, int? commandTimeout)
@@ -599,8 +618,9 @@ namespace DapperExtensions
             CommandDefinition commond = new CommandDefinition(sql, dynamicParameters, transaction, commandTimeout, CommandType.Text, buffered == true ? CommandFlags.Buffered: CommandFlags.NoCache);
 
             var result = await connection.QueryAsync<T>(commond);
-             return result;
+             return result.ToList();
         }
+
 
         protected IEnumerable<T> GetPage<T>(IDbConnection connection, IClassMapper classMap, IPredicate predicate, IList<ISort> sort, int page, int resultsPerPage, IDbTransaction transaction, int? commandTimeout, bool buffered) where T : class
         {
@@ -626,7 +646,7 @@ namespace DapperExtensions
             CommandDefinition commond = new CommandDefinition(sql, dynamicParameters, transaction, commandTimeout, CommandType.Text, buffered == true ? CommandFlags.Buffered : CommandFlags.NoCache);
 
             var result = await connection.QueryAsync<T>(commond);
-            return result;
+            return result.ToList();
         }
 
         protected IEnumerable<T> GetSet<T>(IDbConnection connection, IClassMapper classMap, IPredicate predicate, IList<ISort> sort, int firstResult, int maxResults, IDbTransaction transaction, int? commandTimeout, bool buffered) where T : class

@@ -263,9 +263,6 @@ namespace DapperExtensions
             return result;
         }
 
-      
-
-
         /// <summary>
         /// Executes a delete query using the specified predicate.
         /// </summary>
@@ -299,6 +296,16 @@ namespace DapperExtensions
         }
 
         /// <summary>
+        /// Executes a select query using the specified predicate, returning an  data typed as per T.
+        /// </summary>
+        public static async Task<T> GetFirstAsync<T>(this IDbConnection connection, object predicate = null, IList<ISort> sort = null, IDbTransaction transaction = null, int? commandTimeout = null) where T : class
+        {
+            var result = await Instance.GetFirstAsync<T>(connection, predicate, sort, transaction, commandTimeout);
+
+            return result;
+        }
+
+        /// <summary>
         /// Executes a select query using the specified predicate, returning an IEnumerable data typed as per T.
         /// Data returned is dependent upon the specified page and resultsPerPage.
         /// </summary>
@@ -314,7 +321,7 @@ namespace DapperExtensions
         public static async Task<IEnumerable<T>> GetPageAsync<T>(this IDbConnection connection, object predicate, IList<ISort> sort, int page, int resultsPerPage, IDbTransaction transaction = null, int? commandTimeout = null, bool buffered = false) where T : class
         {
             var result = await Instance.GetPageAsync<T>(connection, predicate, sort, page, resultsPerPage, transaction, commandTimeout, buffered);
-            return result;
+            return result.ToList();
         }
 
         /// <summary>
@@ -370,7 +377,6 @@ namespace DapperExtensions
 
         /// <summary>
         /// Generates a COMB Guid which solves the fragmented index issue.
-        /// See: http://davybrion.com/blog/2009/05/using-the-guidcomb-identifier-strategy
         /// </summary>
         public static Guid GetNextGuid()
         {
