@@ -295,16 +295,16 @@ namespace DapperExtensions
             return result;
         }
 
-        /// <summary>
+         /// <summary>
         /// Executes a select query using the specified predicate, returning an  data typed as per T.
         /// </summary>
-        public static async Task<T> GetFirstAsync<T>(this IDbConnection connection, object predicate = null, IList<ISort> sort = null, IDbTransaction transaction = null, int? commandTimeout = null) where T : class
+        public static async Task<T> GetFirstOrDefaultAsync<T>(this IDbConnection connection, object predicate = null, IList<ISort> sort = null, IDbTransaction transaction = null, int? commandTimeout = null) where T : class
         {
-            var result = await Instance.GetFirstAsync<T>(connection, predicate, sort, transaction, commandTimeout);
+            var result = await Instance.GetFirstOrDefaultAsync<T>(connection, predicate, sort, transaction, commandTimeout);
 
             return result;
         }
-
+        
         /// <summary>
         /// Executes a select query using the specified predicate, returning an IEnumerable data typed as per T.
         /// Data returned is dependent upon the specified page and resultsPerPage.
@@ -312,6 +312,15 @@ namespace DapperExtensions
         public static IEnumerable<T> GetPage<T>(this IDbConnection connection, object predicate, IList<ISort> sort, int page, int resultsPerPage, IDbTransaction transaction = null, int? commandTimeout = null, bool buffered = false) where T : class
         {
             return Instance.GetPage<T>(connection, predicate, sort, page, resultsPerPage, transaction, commandTimeout, buffered);
+        }
+
+        /// <summary>
+        /// Executes a select query using the specified predicate, returning an IEnumerable data typed as per T.
+        /// Data returned is dependent upon the specified page and resultsPerPage.
+        /// </summary>
+        public static IEnumerable<T> GetPage<T>(this IDbConnection connection,string[] fields, object predicate, IList<ISort> sort, int page, int resultsPerPage, IDbTransaction transaction = null, int? commandTimeout = null, bool buffered = false) where T : class
+        {
+            return Instance.GetPage<T>(connection,fields, predicate, sort, page, resultsPerPage, transaction, commandTimeout, buffered);
         }
 
         /// <summary>

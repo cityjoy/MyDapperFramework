@@ -12,7 +12,9 @@ namespace DapperExtensions.Sql
         
         string Select(IClassMapper classMap, IPredicate predicate, IList<ISort> sort, IDictionary<string, object> parameters);
         string SelectPaged(IClassMapper classMap, IPredicate predicate, IList<ISort> sort, int page, int resultsPerPage, IDictionary<string, object> parameters);
+        string SelectPaged(IClassMapper classMap,string[] fields, IPredicate predicate, IList<ISort> sort, int page, int resultsPerPage, IDictionary<string, object> parameters);
         string SelectSet(IClassMapper classMap, IPredicate predicate, IList<ISort> sort, int firstResult, int maxResults, IDictionary<string, object> parameters);
+        string SelectSet(string[] fields,IClassMapper classMap, IPredicate predicate, IList<ISort> sort, int firstResult, int maxResults, IDictionary<string, object> parameters);
         string Count(IClassMapper classMap, IPredicate predicate, IDictionary<string, object> parameters);
 
         string Insert(IClassMapper classMap);
@@ -62,10 +64,10 @@ namespace DapperExtensions.Sql
 
         public virtual string SelectPaged(IClassMapper classMap, IPredicate predicate, IList<ISort> sort, int page, int resultsPerPage, IDictionary<string, object> parameters)
         {
-            if (sort == null || !sort.Any())
-            {
-                throw new ArgumentNullException("Sort", "Sort cannot be null or empty.");
-            }
+            //if (sort == null || !sort.Any())
+            //{
+            //    throw new ArgumentNullException("Sort", "Sort cannot be null or empty.");
+            //}
 
             if (parameters == null)
             {
@@ -80,14 +82,46 @@ namespace DapperExtensions.Sql
                 innerSql.Append(" WHERE ")
                     .Append(predicate.GetSql(this, parameters));
             }
-
-            string orderBy = sort.Select(s => GetColumnName(classMap, s.PropertyName, false) + (s.Ascending ? " ASC" : " DESC")).AppendStrings();
-            innerSql.Append(" ORDER BY " + orderBy);
+            if (sort != null)
+            {
+                string orderBy = sort.Select(s => GetColumnName(classMap, s.PropertyName, false) + (s.Ascending ? " ASC" : " DESC")).AppendStrings();
+                innerSql.Append(" ORDER BY " + orderBy);
+            }
 
             string sql = Configuration.Dialect.GetPagingSql(innerSql.ToString(), page, resultsPerPage, parameters);
             return sql;
         }
 
+        public virtual string SelectPaged(IClassMapper classMap,string[] fields, IPredicate predicate, IList<ISort> sort, int page, int resultsPerPage, IDictionary<string, object> parameters)
+        {
+            //if (sort == null || !sort.Any())
+            //{
+            //    throw new ArgumentNullException("Sort", "Sort cannot be null or empty.");
+            //}
+
+            if (parameters == null)
+            {
+                throw new ArgumentNullException("Parameters");
+            }
+
+            StringBuilder innerSql = new StringBuilder(string.Format("SELECT {0} FROM {1}",
+                BuildSelectColumns(fields),
+                GetTableName(classMap)));
+            if (predicate != null)
+            {
+                innerSql.Append(" WHERE ")
+                    .Append(predicate.GetSql(this, parameters));
+            }
+            if (sort != null)
+            {
+                string orderBy = sort.Select(s => GetColumnName(classMap, s.PropertyName, false) + (s.Ascending ? " ASC" : " DESC")).AppendStrings();
+                innerSql.Append(" ORDER BY " + orderBy);
+            }
+
+            string sql = Configuration.Dialect.GetPagingSql(innerSql.ToString(), page, resultsPerPage, parameters);
+            return sql;
+
+        }
         public virtual string SelectSet(IClassMapper classMap, IPredicate predicate, IList<ISort> sort, int firstResult, int maxResults, IDictionary<string, object> parameters)
         {
             if (sort == null || !sort.Any())
@@ -196,7 +230,7 @@ namespace DapperExtensions.Sql
                     }
                     else
                     {
-                        fileds.Append(item.Key + "=@" + item.Key+",");
+                        fileds.Append(" , " + item.Key + "=@" + item.Key );
 
                     }
                 }
@@ -282,6 +316,40 @@ namespace DapperExtensions.Sql
                 .Where(p => !p.Ignored)
                 .Select(p => GetColumnName(classMap, p, true));
             return columns.AppendStrings();
+        }
+
+        public virtual string SelectSet(string[] fields,IClassMapper classMap, IPredicate predicate, IList<ISort> sort, int firstResult, int maxResults, IDictionary<string, object> parameters)
+        {
+            if (sort == null || !sort.Any())
+            {
+                throw new ArgumentNullException("Sort", "Sort cannot be null or empty.");
+            }
+
+            if (parameters == null)
+            {
+                throw new ArgumentNullException("Parameters");
+            }
+
+            StringBuilder innerSql = new StringBuilder(string.Format("SELECT {0} FROM {1}",
+                BuildSelectColumns(fields),
+                GetTableName(classMap)));
+            if (predicate != null)
+            {
+                innerSql.Append(" WHERE ")
+                    .Append(predicate.GetSql(this, parameters));
+            }
+
+            string orderBy = sort.Select(s => GetColumnName(classMap, s.PropertyName, false) + (s.Ascending ? " ASC" : " DESC")).AppendStrings();
+            innerSql.Append(" ORDER BY " + orderBy);
+
+            string sql = Configuration.Dialect.GetSetSql(innerSql.ToString(), firstResult, maxResults, parameters);
+            return sql;
+        }
+
+
+        public virtual string BuildSelectColumns(string[] fields)
+        {
+            return fields.AppendStrings();
         }
     }
 }

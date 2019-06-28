@@ -14,6 +14,14 @@ namespace MyDapperFramework.Repository.Interface
     public interface IDataAccess<TEntity> where TEntity : class
     {
         /// <summary>
+        /// 事务操作
+        /// </summary>
+        /// <param name="trans">要进行事务操作的SQL语句和参数列表</param>
+        /// <param name="commandTimeout">超时时间</param>
+        /// <returns></returns>
+        Tuple<bool, string> ExecuteTransaction(List<Tuple<string, object>> trans, int? commandTimeout = null);
+
+        /// <summary>
         /// 添加实体
         /// </summary>
         /// <param name="entity"></param>
@@ -33,17 +41,16 @@ namespace MyDapperFramework.Repository.Interface
         /// </summary>
         /// <param name="entity"></param>
         /// <returns></returns>
-        TEntity Update(TEntity entity);
+        bool Update(TEntity entity);
 
 
         /// <summary>
-        /// 只更新部分字段
+        /// 根据表达式更新实体指定字段数据
         /// </summary>
-        /// <param name="id">主键</param>
-        /// <param name="prams">参数 new {name="xxx"}</param>
+        /// <param name="parameters"></param>
+        /// <param name="expression"></param>
         /// <returns></returns>
-        bool Update(object id, object prams);
-
+        bool Update(object parameters, Expression<Func<TEntity, bool>> expression);
 
         /// <summary>
         /// 批量更改实体 事物操作
@@ -67,14 +74,6 @@ namespace MyDapperFramework.Repository.Interface
         /// <param name="key"></param>
         /// <returns></returns>
         bool Delete(IEnumerable<object> key);
-
-
-        /// <summary>
-        /// 逻辑删除数据
-        /// </summary>
-        /// <param name="key"></param>
-        /// <returns></returns>
-        bool DeleteLogic(object key);
 
 
         /// <summary>
@@ -107,7 +106,7 @@ namespace MyDapperFramework.Repository.Interface
         /// <param name="expression">linq 表达式 谓词</param>
         /// <param name="sortList">如排序字段 new {Name=true,Age=flase} 就是Name升序然后再按照Age降序</param>
         /// <returns></returns>
-        IEnumerable<TEntity> GetList(Expression<Func<TEntity, bool>> expression, object sortList = null);
+        List<TEntity> GetList(Expression<Func<TEntity, bool>> expression, object sortList = null);
 
 
 
@@ -120,7 +119,7 @@ namespace MyDapperFramework.Repository.Interface
         /// <param name="expression">条件 linq表达式 谓词</param>
         /// <param name="sort">如排序字段 new {Name=true,Age=flase} 就是Name升序然后再按照Age降序</param>
         /// <returns></returns>
-        IEnumerable<TEntity> GetPageData(int pageNum, int pageSize, out long outTotal, Expression<Func<TEntity, bool>> expression = null, object sort = null);
+        List<TEntity> GetPageData(int pageNum, int pageSize, out long outTotal, Expression<Func<TEntity, bool>> expression = null, object sort = null);
 
 
         /// <summary>

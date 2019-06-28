@@ -23,7 +23,7 @@ namespace MyDapperFramework.Service
         public BaseService()
         {
             Mappings.Initialize();
-            repository = new BaseRepository<TEntity>(ConnectionFactory.CreateMainSiteConnection());
+            repository = new BaseRepository<TEntity>();
         }
         #region 数据操作
 
@@ -52,20 +52,20 @@ namespace MyDapperFramework.Service
         /// </summary>
         /// <param name="entity"></param>
         /// <returns></returns>
-        public TEntity Update(TEntity entity)
+        public bool Update(TEntity entity)
         {
             return repository.Update(entity);
         }
 
         /// <summary>
-        /// 更新实体指定字段数据
+        /// 根据sql语句更新符合条件的数据
         /// </summary>
-        /// <param name="id"></param>
-        /// <param name="prams"></param>
+        /// <param name="sql"></param>
+        /// <param name="parm"></param>
         /// <returns></returns>
-        public bool Update(object id, object prams)
+        public bool Update(string sql, object parm)
         {
-            return repository.Update(id, prams);
+            return repository.Update(sql, parm);
         }
 
         /// <summary>
@@ -112,18 +112,6 @@ namespace MyDapperFramework.Service
         public bool Delete(IEnumerable<object> keys)
         {
             return repository.Delete(keys);
-
-        }
-
-
-        /// <summary>
-        /// 逻辑删除数据
-        /// </summary>
-        /// <param name="key"></param>
-        /// <returns></returns>
-        public bool DeleteLogic(object key)
-        {
-            return repository.DeleteLogic(key);
 
         }
 
@@ -187,7 +175,22 @@ namespace MyDapperFramework.Service
         }
 
         /// <summary>
-        /// 数据表分页
+        /// 数据表指定字段分页
+        /// </summary>
+        /// <param name="pager">页数信息</param>
+        /// <param name="fields">要查询是字段对象</param>
+        /// <param name="expression">条件 linq表达式 谓词</param>
+        /// <param name="sortList">排序字段</param>
+        /// <returns></returns>
+        public List<TEntity> GetPageData(XPager pager, string[] fields, Expression<Func<TEntity, bool>> expression = null, object sortList = null)
+        {
+            return repository.GetPageData(pager, fields, expression, sortList);
+
+        }
+
+
+        /// <summary>
+        /// 数据表所有字段分页
         /// </summary>
         /// <param name="pager">页数信息</param>
         /// <param name="expression">条件 linq表达式 谓词</param>
@@ -214,7 +217,18 @@ namespace MyDapperFramework.Service
             return repository.GetPageData(pageNum, pageSize, out   outTotal, expression = null, sortList = null);
 
         }
-
+        /// <summary>
+        /// 获取id范围内的列表
+        /// </summary>
+        /// <param name="fields"></param>
+        /// <param name="ids"></param>
+        /// <returns></returns>
+        public List<TEntity> GetListInIds(string fields, int[] ids)
+        {
+            string entityName = typeof(TEntity).Name;
+            List<TEntity> list = repository.GetListInIds(entityName, fields, ids);
+            return list;
+        }
 
         #endregion
 

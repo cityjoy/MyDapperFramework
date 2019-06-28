@@ -49,9 +49,5 @@ namespace MyDapperFramework.Repository
             }  
         }
 
-        public static IDataAccess<TEntity> CreateDbSet<TEntity>() where TEntity : class
-        {
-            return new BaseRepository<TEntity>("LocalDb");
-        }
     }
 }

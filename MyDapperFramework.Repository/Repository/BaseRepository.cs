@@ -15,6 +15,7 @@ using MyDapperFramework.Repository.Interface;
 using MyDapperFramework.Repository.Dapper;
 using MyDapperFramework.Repository.Mappings;
 using MyDapperFramework.Repository.Entity;
+using DapperExtensions.Sql;
 namespace MyDapperFramework.Repository.Repository
 {
     /// <summary>
@@ -23,34 +24,40 @@ namespace MyDapperFramework.Repository.Repository
     /// <typeparam name="TEntity"></typeparam>
     public partial class BaseRepository<TEntity> : IDataAccess<TEntity>, IDisposable where TEntity : class
     {
+        
 
-        #region 初始化参数
+        #region 事务操作
         /// <summary>
-        /// 数据库连接实例 
+        /// 事务操作
         /// </summary>
-        internal IDbConnection _Conn { get;  set; }
-
-
-        /// <summary>
-        /// 通过数据库连接实例创建访问上下文
-        /// </summary>
-        /// <param name="conn"></param>
-        public BaseRepository(IDbConnection conn)
+        /// <param name="trans">要进行事务操作的SQL语句和参数列表</param>
+        /// <param name="commandTimeout">超时时间</param>
+        /// <returns></returns>
+        public Tuple<bool, string> ExecuteTransaction(List<Tuple<string, object>> trans, int? commandTimeout = null)
         {
-            this._Conn = conn;
+            if (!trans.Any()) return new Tuple<bool, string>(false, "要进行事务操作的SQL语句不能为空！");
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
+            {
+                using (var transaction = conn.BeginTransaction())
+                {
+                    try
+                    {
+                        foreach (var tran in trans)
+                        {
+                            conn.Execute(tran.Item1, tran.Item2, transaction, commandTimeout);
+                        }
+                        transaction.Commit();
+                        return new Tuple<bool, string>(true, string.Empty);
+                    }
+                    catch (Exception ex)
+                    {
+                        transaction.Rollback();//回滚
+                        return new Tuple<bool, string>(false, ex.ToString());
+                    }
 
+                }
+            }
         }
-
-        /// <summary>
-        /// 通过连接字符串创建访问上下文
-        /// </summary>
-        /// <param name="connStr"></param>
-        public BaseRepository(string connStr)
-        {
-            this._Conn = new SqlConnection(ConfigurationManager.ConnectionStrings[connStr].ConnectionString);
-        }
-
-
         #endregion
 
         #region 数据操作
@@ -62,16 +69,10 @@ namespace MyDapperFramework.Repository.Repository
         /// <returns></returns>
         public TEntity Insert(TEntity entity)
         {
-            try
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
             {
-                if (_Conn.State == ConnectionState.Closed)
-                    _Conn.Open();
-                _Conn.Insert<TEntity>(entity);
-                return  entity;
-            }
-            finally
-            {
-                _Conn.Close();
+                conn.Insert<TEntity>(entity);
+                return entity;
             }
 
         }
@@ -83,85 +84,55 @@ namespace MyDapperFramework.Repository.Repository
         /// <returns></returns>
         public bool Insert(IEnumerable<TEntity> entitys)
         {
-            if (_Conn.State == ConnectionState.Closed)
-                _Conn.Open();
-            IDbTransaction tran = _Conn.BeginTransaction();
-            try
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
             {
-                _Conn.Insert(entitys, transaction: tran);
-                tran.Commit();
-                return true;
-            }
-            catch(Exception ex)
-            {
-                tran.Rollback();//事物回滚
-                throw ex;
-            }
-            finally
-            {
-                _Conn.Close();
+                IDbTransaction tran = conn.BeginTransaction();
+                try
+                {
+                    conn.Insert(entitys, transaction: tran);
+                    tran.Commit();
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    tran.Rollback();//事物回滚
+                    tran.Dispose();
+                }
+                return false;
+
             }
         }
-
+        /// <summary>
+        /// 批量添加实体
+        /// </summary>
+        /// <param name="entitys"></param>
+        /// <returns></returns>
+        public bool InsertNotTran(IEnumerable<TEntity> entitys)
+        {
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
+            {
+                try
+                {
+                    conn.Insert(entitys);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    return false;
+                }
+            }
+        }
         /// <summary>
         /// 更新实体
         /// </summary>
         /// <param name="entity"></param>
         /// <returns></returns>
-        public TEntity Update(TEntity entity)
+        public bool Update(TEntity entity)
         {
-            try
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
             {
-                if (_Conn.State == ConnectionState.Closed)
-                    _Conn.Open();
-                var flag = _Conn.Update<TEntity>(entity);
-                return flag ? entity : null;
-            }
-            finally
-            {
-                _Conn.Close();
-            }
-        }
-
-        /// <summary>
-        /// 更新实体指定字段数据
-        /// </summary>
-        /// <param name="id"></param>
-        /// <param name="prams"></param>
-        /// <returns></returns>
-        public bool Update(object id, object prams)
-        {
-            try
-            {
-                var tableName = typeof(TEntity).Name;//获取当前要更新的表名称
-                if (typeof(TEntity).Name == prams.GetType().Name) throw new ArgumentException("参数不能是当前实体的强类型,否则更新会覆盖所有未赋值的字段");
-
-                //获取指定的更新字段
-                PropertyInfo[] fields = prams.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                //构建Sql语句
-                var sqlBuilder = new StringBuilder("Update\0" + tableName + "\0set\0");
-
-                foreach (var f in fields)
-                {
-                    //验证指定更新字段是否在表中存在    
-                    var exist = typeof(TEntity).GetProperty(f.Name);
-                    if (exist == null) throw new ArgumentException("指定的更新的字段在表中不存在,请检查!");
-
-                    sqlBuilder.Append(f.Name + "=@" + f.Name + "\0");
-                    if (fields.Count() > 1 && fields.Last() != f)
-                        sqlBuilder.Append(",");
-                }
-
-                sqlBuilder.Append("where Id=" + "'" + id + "'");
-                var sql = sqlBuilder.ToString();
-                if (_Conn.State == ConnectionState.Closed)
-                    _Conn.Open();
-                var succ = _Conn.Execute(sql, prams);
-                return succ > 0;
-            }
-            finally
-            {
-                _Conn.Close();
+                bool result = conn.Update<TEntity>(entity);
+                return result;
             }
         }
 
@@ -171,23 +142,17 @@ namespace MyDapperFramework.Repository.Repository
         /// <param name="parameters"></param>
         /// <param name="expression"></param>
         /// <returns></returns>
-        public bool Update(object parameters,Expression<Func<TEntity, bool>> expression)
+        public bool Update(object parameters, Expression<Func<TEntity, bool>> expression)
         {
-            try
+            bool result = false;
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
             {
-                if (_Conn.State == ConnectionState.Closed)
-                    _Conn.Open();
                 var predicate = DapperLinqBuilder<TEntity>.FromExpression(expression);
-                var succ = _Conn.Update<TEntity>(parameters, predicate);
-                return succ;
+                result = conn.Update<TEntity>(parameters, predicate);
             }
-            finally
-            {
-                _Conn.Close();
-            }
+            return result;
         }
 
-      
 
         /// <summary>
         /// 批量更新实体
@@ -196,30 +161,46 @@ namespace MyDapperFramework.Repository.Repository
         /// <returns></returns>
         public bool Update(IEnumerable<TEntity> entitys)
         {
-            if (_Conn.State == ConnectionState.Closed)
-                _Conn.Open();
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
+            {
 
-            IDbTransaction tran = _Conn.BeginTransaction();
-            try
-            {
-                foreach (var item in entitys)
+                IDbTransaction tran = conn.BeginTransaction();
+                try
                 {
-                    _Conn.Update<TEntity>(item, transaction: tran);
+                    foreach (var item in entitys)
+                    {
+                        conn.Update<TEntity>(item, transaction: tran);
+                    }
+                    tran.Commit();
+                    return true;
                 }
-                tran.Commit();
-                return true;
-            }
-            catch(Exception ex)
-            {
-                tran.Rollback();//事物回滚
-                throw ex;
-            }
-            finally
-            {
-                tran.Dispose();
-                _Conn.Close();
+                catch (Exception ex)
+                {
+                    tran.Rollback();//事物回滚
+                    tran.Dispose();
+                }
+                return false;
+
             }
         }
+
+        /// <summary>
+        /// 根据sql语句更新符合条件的数据
+        /// </summary>
+        /// <param name="sql"></param>
+        /// <param name="parm"></param>
+        /// <returns></returns>
+        public bool Update(string sql, object parm)
+        {
+
+            bool result = false;
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
+            {
+                result = conn.Execute(sql, parm) > 0;
+            }
+            return result;
+        }
+
 
         /// <summary>
         /// 根据主键删除实体
@@ -228,16 +209,11 @@ namespace MyDapperFramework.Repository.Repository
         /// <returns></returns>
         public bool Delete(object key)
         {
-            try
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
             {
-                if (_Conn.State == ConnectionState.Closed)
-                    _Conn.Open();
-                TEntity item = _Conn.Get<TEntity>(key);
-                return _Conn.Delete(item);
-            }
-            finally
-            {
-                _Conn.Close();
+                TEntity item = conn.Get<TEntity>(key);
+                return conn.Delete(item);
+
             }
         }
 
@@ -248,39 +224,61 @@ namespace MyDapperFramework.Repository.Repository
         /// <returns></returns>
         public bool Delete(IEnumerable<object> keys)
         {
-            if (_Conn.State == ConnectionState.Closed)
-                _Conn.Open();
-            IDbTransaction tran = _Conn.BeginTransaction();
-            try
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
             {
-                var tblName = typeof(TEntity).Name;
-                keys = keys.Select(k => string.Format("'{0}'", k));
-                var sql =string.Format("Delete From {0} where Id in ({1})",tblName,string.Join(",", keys));
-                _Conn.Execute(sql, transaction: tran);
-                tran.Commit();
-                return true;
-            }
-            catch(Exception ex)
-            {
-                tran.Rollback();//事物回滚
-                throw ex;
-            }
-            finally
-            {
-                _Conn.Close();
+                IDbTransaction tran = conn.BeginTransaction();
+                try
+                {
+                    var tblName = typeof(TEntity).Name;
+                    keys = keys.Select(k => string.Format("'{0}'", k));
+                    var sql = string.Format("Delete From {0} where Id in ({1})", tblName, string.Join(",", keys));
+                    conn.Execute(sql, transaction: tran);
+                    tran.Commit();
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    tran.Rollback();//事物回滚
+                    tran.Dispose();
+                }
+                return false;
+
             }
         }
-
 
         /// <summary>
-        /// 逻辑删除数据
+        /// 根据sql语句删除符合条件的数据
         /// </summary>
-        /// <param name="key"></param>
+        /// <param name="sql"></param>
+        /// <param name="parm"></param>
         /// <returns></returns>
-        public bool DeleteLogic(object key)
+        public bool Delete(string sql, object parm)
         {
-            return this.Update(key, new { IsDeleted = DataState.Deleted });
+
+            bool result = false;
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
+            {
+                result = conn.Execute(sql, parm) > 0;
+            }
+            return result;
         }
+
+        /// <summary>
+        /// 删除符合条件的数据
+        /// </summary>
+        /// <param name="expression"></param>
+        /// <returns></returns>
+        public bool Delete(Expression<Func<TEntity, bool>> expression)
+        {
+            bool result = false;
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
+            {
+                var predicate = DapperLinqBuilder<TEntity>.FromExpression(expression);
+                result = conn.Delete<TEntity>(predicate);
+            }
+            return result;
+        }
+
 
         #endregion
 
@@ -292,17 +290,12 @@ namespace MyDapperFramework.Repository.Repository
         /// <returns></returns>
         public TEntity GetById(object id)
         {
-            try
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
             {
-                if (_Conn.State == ConnectionState.Closed)
-                    _Conn.Open();
-                var item = _Conn.Get<TEntity>(id);
+                var item = conn.Get<TEntity>(id);
                 return item;
             }
-            finally
-            {
-                _Conn.Close();
-            }
+
         }
 
         /// <summary>
@@ -312,16 +305,10 @@ namespace MyDapperFramework.Repository.Repository
         /// <returns></returns>
         public long GetCount(Expression<Func<TEntity, bool>> expression = null)
         {
-            try
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
             {
-                if (_Conn.State == ConnectionState.Closed)
-                    _Conn.Open();
                 var predicate = DapperLinqBuilder<TEntity>.FromExpression(expression);
-                return _Conn.Count<TEntity>(predicate);
-            }
-            finally
-            {
-                _Conn.Close();
+                return conn.Count<TEntity>(predicate);
             }
         }
 
@@ -333,18 +320,16 @@ namespace MyDapperFramework.Repository.Repository
         /// <returns></returns>
         public TEntity GetFist(Expression<Func<TEntity, bool>> expression = null, object sortList = null)
         {
-            try
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
             {
-                if (_Conn.State == ConnectionState.Closed)
-                    _Conn.Open();
                 var predicate = DapperLinqBuilder<TEntity>.FromExpression(expression);
-                //var sort = SortConvert(sortList);
-                var data = _Conn.GetList<TEntity>(predicate);
+                IList<ISort> sort = null;
+                if (sortList != null)
+                {
+                    sort = SortConvert(sortList);//转换排序接口
+                }
+                var data = conn.GetList<TEntity>(predicate, sort);
                 return data.FirstOrDefault();
-            }
-            finally
-            {
-                _Conn.Close();
             }
         }
 
@@ -364,28 +349,58 @@ namespace MyDapperFramework.Repository.Repository
         /// </summary>
         /// <param name="expression">linq表达式</param>
         /// <returns></returns>
-        public IEnumerable<TEntity> GetList(Expression<Func<TEntity, bool>> expression, object sortList = null)
+        public List<TEntity> GetList(Expression<Func<TEntity, bool>> expression, object sortList = null)
         {
-            try
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
             {
-
-                if (_Conn.State == ConnectionState.Closed)
-                    _Conn.Open();
-                IList<ISort> sort = SortConvert(sortList);//转换排序接口
+                IList<ISort> sort = null;
+                if (sortList != null)
+                {
+                    sort = SortConvert(sortList);//转换排序接口
+                }
                 if (expression == null)
                 {
                     //允许脏读
-                    return _Conn.GetList<TEntity>(null, sort, transaction: _Conn.BeginTransaction(IsolationLevel.ReadUncommitted));//如果条件为Null 就查询所有数据
+                    return conn.GetList<TEntity>(null, sort, transaction: conn.BeginTransaction(IsolationLevel.ReadUncommitted)).ToList();//如果条件为Null 就查询所有数据
                 }
                 else
                 {
                     var predicate = DapperLinqBuilder<TEntity>.FromExpression(expression);
-                    return _Conn.GetList<TEntity>(predicate, sort, transaction: _Conn.BeginTransaction(IsolationLevel.ReadUncommitted));
+                    return conn.GetList<TEntity>(predicate, sort, transaction: conn.BeginTransaction(IsolationLevel.ReadUncommitted)).ToList();
                 }
             }
-            finally
+        }
+        /// <summary>
+        /// 根据条件获取表数据
+        /// </summary>
+        /// <param name="predicate">表达式</param>
+        /// <returns></returns>
+        public List<TEntity> GetList(IPredicateGroup predicate, object sortList = null)
+        {
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
             {
-                _Conn.Close();
+                IList<ISort> sort = null;
+                if (sortList != null)
+                {
+                    sort = SortConvert(sortList);//转换排序接口
+                }
+                return conn.GetList<TEntity>(predicate, sort, transaction: conn.BeginTransaction(IsolationLevel.ReadUncommitted)).ToList();
+            }
+        }
+
+        /// <summary>
+        /// 根据sql语句获取数据列表
+        /// </summary>
+        /// <param name="sql"></param>
+        /// <param name="parm"></param>
+        /// <returns></returns>
+        public List<TEntity> GetList(string sql, object parm)
+        {
+            List<TEntity> result = null;
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
+            {
+                result = conn.Query<TEntity>(sql, parm).ToList();
+                return result;
             }
         }
 
@@ -397,26 +412,75 @@ namespace MyDapperFramework.Repository.Repository
         /// <param name="expression">条件 linq表达式 谓词</param>
         /// <param name="sortList">排序字段</param>
         /// <returns></returns>
-        public IEnumerable<TEntity> GetPageData(XPager pager, Expression<Func<TEntity, bool>> expression = null, object sortList = null)
+        public List<TEntity> GetPageData(XPager pager, Expression<Func<TEntity, bool>> expression = null, object sortList = null)
         {
-            try
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
             {
-                if (_Conn.State == ConnectionState.Closed)
-                    _Conn.Open();
-                IDbTransaction transaction = _Conn.BeginTransaction(IsolationLevel.ReadUncommitted);
+                IDbTransaction transaction = conn.BeginTransaction(IsolationLevel.ReadUncommitted);
                 int commandTimeout = 1800;
                 IPredicateGroup predicate = DapperLinqBuilder<TEntity>.FromExpression(expression); //转换Linq表达式
-                IList<ISort> sort = SortConvert(sortList);//转换排序接口
-                var entities = _Conn.GetPage<TEntity>(predicate, sort, pager.PageIndex, pager.PageSize, transaction);
-                var list = entities.ToList();
-                pager.RecordCount = _Conn.Count<TEntity>(predicate, transaction, commandTimeout);
+                IList<ISort> sort = null;
+                if (sortList != null)
+                {
+                    sort = SortConvert(sortList);//转换排序接口
+                }
+                var entities = conn.GetPage<TEntity>(predicate, sort, pager.PageIndex, pager.PageSize, transaction).ToList();
+                pager.RecordCount = conn.Count<TEntity>(predicate, transaction, commandTimeout);
                 return entities;
             }
-            finally
+        }
+
+
+        /// <summary>
+        /// 数据表 分页
+        /// </summary>
+        /// <param name="pager">页数信息</param>
+        /// <param name="fields">要查询是字段对象</param>
+        /// <param name="expression">条件 linq表达式 谓词</param>
+        /// <param name="sortList">排序字段</param>
+        /// <returns></returns>
+        public List<TEntity> GetPageData(XPager pager, string[] fields, Expression<Func<TEntity, bool>> expression = null, object sortList = null)
+        {
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
             {
-                _Conn.Close();
+                IDbTransaction transaction = conn.BeginTransaction(IsolationLevel.ReadUncommitted);
+                int commandTimeout = 1800;
+                IPredicateGroup predicate = DapperLinqBuilder<TEntity>.FromExpression(expression); //转换Linq表达式
+                IList<ISort> sort = null;
+                if (sortList != null)
+                {
+                    sort = SortConvert(sortList);//转换排序接口
+                }
+                var entities = conn.GetPage<TEntity>(fields, predicate, sort, pager.PageIndex, pager.PageSize, transaction).ToList();
+                pager.RecordCount = conn.Count<TEntity>(predicate, transaction, commandTimeout);
+                return entities;
             }
         }
+
+        /// <summary>
+        /// 数据表 分页
+        /// </summary>
+        /// <param name="pager">页数信息</param>
+        /// <param name="predicate">条件</param>
+        /// <param name="sortList">排序字段</param>
+        /// <returns></returns>
+        public List<TEntity> GetPageData(XPager pager, IPredicateGroup predicate = null, object sortList = null)
+        {
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
+            {
+                IDbTransaction transaction = conn.BeginTransaction(IsolationLevel.ReadUncommitted);
+                int commandTimeout = 1800;
+                IList<ISort> sort = null;
+                if (sortList != null)
+                {
+                    sort = SortConvert(sortList);//转换排序接口
+                }
+                var entities = conn.GetPage<TEntity>(predicate, sort, pager.PageIndex, pager.PageSize, transaction).ToList();
+                pager.RecordCount = conn.Count<TEntity>(predicate, transaction, commandTimeout);
+                return entities;
+            }
+        }
+
 
         /// <summary>
         /// 数据表 分页
@@ -427,23 +491,36 @@ namespace MyDapperFramework.Repository.Repository
         /// <param name="expression">条件 linq表达式 谓词</param>
         /// <param name="sortList">排序字段</param>
         /// <returns></returns>
-        public IEnumerable<TEntity> GetPageData(int pageNum, int pageSize, out long outTotal,
+        public List<TEntity> GetPageData(int pageNum, int pageSize, out long outTotal,
             Expression<Func<TEntity, bool>> expression = null, object sortList = null)
         {
-            try
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
             {
-                if (_Conn.State == ConnectionState.Closed)
-                    _Conn.Open();
+                IDbTransaction transaction = conn.BeginTransaction(IsolationLevel.ReadUncommitted);
+                int commandTimeout = 1800;
                 IPredicateGroup predicate = DapperLinqBuilder<TEntity>.FromExpression(expression); //转换Linq表达式
                 IList<ISort> sort = SortConvert(sortList);//转换排序接口
-                var entities = _Conn.GetPage<TEntity>(predicate, sort, pageNum, pageSize, transaction: _Conn.BeginTransaction(IsolationLevel.ReadUncommitted));
-                outTotal = _Conn.Count<TEntity>(null);
+                var entities = conn.GetPage<TEntity>(predicate, sort, pageNum, pageSize, transaction: conn.BeginTransaction(IsolationLevel.ReadUncommitted)).ToList();
+                outTotal = conn.Count<TEntity>(predicate, transaction, commandTimeout);
                 return entities;
             }
-            finally
+
+        }
+        /// <summary>
+        /// 获取id范围内的列表
+        /// </summary>
+        /// <param name="tableName">表名</param>
+        /// <param name="fields">字段串（如:"Id,Name,Age"）</param>
+        /// <param name="ids">id列表</param>
+        /// <returns></returns>
+        public List<TEntity> GetListInIds(string tableName, string fields, int[] ids)
+        {
+            if (ids == null || ids.Length == 0)
             {
-                _Conn.Close();
+                return new List<TEntity>();
             }
+            List<TEntity> list = GetList(string.Format("SELECT * FROM [{0}]  WHERE [{1}] IN @ids", tableName, fields), new { ids = ids });
+            return list;
         }
 
 
@@ -460,7 +537,7 @@ namespace MyDapperFramework.Repository.Repository
             IList<ISort> sorts = new List<ISort>();
             if (sortList == null)
             {
-                sorts.Add(Predicates.Sort<TEntity>(null));//默认以开始时间 最早创建的时间 asc=flase 降序
+                sorts.Add(Predicates.Sort<TEntity>(null));//默认以开始时间 最早创建的时间 true=asc= 升序
                 return sorts;
             }
 
@@ -485,9 +562,86 @@ namespace MyDapperFramework.Repository.Repository
         /// </summary>
         public void Dispose()
         {
-            this._Conn.Dispose();//释放数据连接
             this.Dispose();//交给GC释放
         }
         #endregion
+
+        #region 执行复杂sql语句返回int类型数据(不是返回影响行数)
+        /// <summary>
+        /// 执行复杂sql语句返回int类型数据
+        /// </summary>
+        /// <param name="sql">要执行的sql</param>
+        /// <param name="parm">参数</param>
+        /// <returns></returns>
+        public int ExcuteSqlForInt(string sql, object parm)
+        {
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
+            {
+                var result = conn.ExecuteScalar<int>(sql, parm);
+                return result;
+            }
+        }
+        #endregion
+
+        #region 执行复杂sql语句返回当前类型数据
+        /// <summary>
+        /// 执行复杂sql语句返回当前类型数据
+        /// </summary>
+        /// <param name="sql">sql语句</param>
+        /// <param name="parm"></param>
+        /// <returns></returns>
+        public TEntity ExcuteSqlForEntity(string sql, object parm)
+        {
+            TEntity result = null;
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
+            {
+                result = conn.Query<TEntity>(sql, parm).FirstOrDefault();
+                return result;
+            }
+        }
+        #endregion
+
+        #region 执行复杂sql语句返回当前类型数据
+        /// <summary>
+        /// 执行sql返回datatable
+        /// </summary>
+        /// <param name="sql"></param>
+        /// <param name="parm"></param>
+        /// <returns></returns>
+        public DataTable ExcuteSqlForDataTable(string sql, object parm)
+        {
+            DataTable table = new DataTable("MyTable");
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
+            {
+                var reader = conn.ExecuteReader(sql, parm);
+                table.Load(reader);
+            }
+            return table;
+        }
+        #endregion
+
+        /// <summary>
+        /// 执行sql语句返回影响的行数
+        /// </summary>
+        /// <param name="sql">sql语句</param>
+        /// <param name="parm">条件</param>
+        /// <returns></returns>
+        public int ExcuteSqlForAffectedRowNumber(string sql, object parm)
+        {
+            using (var conn = ConnectionFactory.CreateMainSiteConnection())
+            {
+                //开户事务
+                var trans = conn.BeginTransaction();
+                var result = conn.Execute(sql, parm, trans);
+                if (result > 0)
+                {
+                    trans.Commit();
+                }
+                else
+                    trans.Rollback();
+                return result;
+            }
+        }
     }
+
 }
